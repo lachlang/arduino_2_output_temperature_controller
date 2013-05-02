@@ -54,8 +54,8 @@ const int DISPLAY_COOLER_STATUS  =   4;
 const int DISPLAY_WARMER_STATUS  =   5;
 const int DISPLAY_SET_TARGET     =   6;
 const int DISPLAY_TEMP_SUMMARY   =   7;
-const int DISPLAY_RUN_TIME       =   8;
-const int DISPLAY_NEXT_SETPOINT  =   9;
+const int DISPLAY_NEXT_SETPOINT  =   8;
+const int DISPLAY_RUN_TIME       =   9;
 const int NO_OF_LCD_STATES       =  10;
 
 /**
@@ -483,11 +483,11 @@ void displayState()  {
     case DISPLAY_TEMP_SUMMARY:
       displayCurrentTempSummary();
       break;
-    case DISPLAY_RUN_TIME:
-      displayRunTime();
-      break;
     case DISPLAY_NEXT_SETPOINT:
       displayNextSetpoint();
+      break;
+    case DISPLAY_RUN_TIME:
+      displayRunTime();
       break;
     default:
       lcd.clear();
@@ -663,12 +663,13 @@ void displayNextSetpoint() {
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("Next Target Temp");
-  lcd.setCursor(0,1);
-  if (nextSetpoint[0] != -1) {
+  if (nextSetpoint[0] != 0) {
+    lcd.setCursor(0,1);
     lcd.print(getPrintableRunTime(timeToNextChange[0]));
     lcd.setCursor(9,1);
     lcd.print(nextSetpoint[0]);
   } else {
+    lcd.setCursor(2,1);
     lcd.print("none");
   }
 }
