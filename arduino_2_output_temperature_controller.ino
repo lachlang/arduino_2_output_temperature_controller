@@ -64,7 +64,7 @@ const int NO_OF_LCD_STATES       =  10;
  // controller state
 int currentControllerState = 1; // 0 = cooling, 1 = inactive, 2 = heating
 int timeInCurrentControllerState = 0; // seconds
-float currentTemp, targetTemp = 19.0, coolingThreshold = 2.0, heatingThreshold = 1.0;
+float currentTemp, targetTemp = 19.0, coolingThreshold = 0.5, heatingThreshold = 0.5;
 OneWire ds(TEMP_SENSOR_PIN); // pin 10
 byte addr[8];
 
