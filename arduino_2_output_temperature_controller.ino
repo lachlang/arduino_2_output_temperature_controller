@@ -54,7 +54,9 @@ const int DISPLAY_COOLER_STATUS  =   4;
 const int DISPLAY_WARMER_STATUS  =   5;
 const int DISPLAY_SET_TARGET     =   6;
 const int DISPLAY_TEMP_SUMMARY   =   7;
-const int NO_OF_LCD_STATES       =   8;
+const int DISPLAY_RUN_TIME       =   8;
+const int DISPLAY_NEXT_SETPOINT  =   9;
+const int NO_OF_LCD_STATES       =  10;
 
 /**
  * state variables
@@ -78,6 +80,14 @@ boolean isBacklightActive = true;
 float maxTemp = -100.0, minTemp = 200.0;
 int maxTimeHeating = 0; // in seconds
 int maxTimeCooling = 0; // in seconds
+
+// Fermentation Tracking and Target Temperature Scheduling
+int runTime = 0;                  // seconds
+int timeToNextChange[10] = { 0 }; // init all elements to 0
+int nextSetpoint[10] = { 0 };     // init all elements to 0
+// saisson settings
+//int timeToNextChange[10] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
+//int nextSetpoint[10] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 
 /**
  * Arduino setup method
@@ -114,14 +124,16 @@ void setup(void) {
 
 /**
  * main arduino control loop
- * temperature readings are taken every second and LCD buttons and display
- * are checked over 0.1 seconds 
+ * temperature readings are taken every second (1 second) and LCD buttons 
+ * and display are checked over 0.1 seconds 
  */
 void loop(void) {
 
+  // obtain the temperature reading and update the heating/cooling state
   updateTemperature();
   controlTemperatureState();
   
+  // check for button input and process it
   for (int i = 0; i< 10; i ++) {
     controlDisplayState();  
     delay(DELAY); // NOTE: the only delay() in the program
@@ -129,7 +141,12 @@ void loop(void) {
   
   // update the display
   displayState(); 
-  
+
+  runTime++;
+
+  // check to see if a target temperature change has been scheduled
+  checkForScheduledTargetTemperatureChange();
+
   // for extra debuggering
   // outputStateToSerial();
 }
@@ -233,6 +250,34 @@ void controlTemperatureState() {
       } // if
       break;
   } // switch
+}
+
+/**
+ * checks to see if there is a scheduled temperature change and performs
+ * the change if it is time
+ */
+void checkForScheduledTargetTemperatureChange() {
+
+  // no scheduled target temperature changes
+  if (nextSetpoint[0] == 0) {
+    return;
+  }
+
+  // decrement countdown timer
+  timeToNextChange[0]--;
+
+  //
+  if (timeToNextChange == 0) {
+    performTargetTemperatureChange();
+  }
+}
+
+/**
+ * performs the target temperature change by cycling the array values and
+ * updating the target temperature variable
+ */
+void performTargetTemperatureChange() {
+  //TODO
 }
 
 /**
@@ -438,6 +483,12 @@ void displayState()  {
     case DISPLAY_TEMP_SUMMARY:
       displayCurrentTempSummary();
       break;
+    case DISPLAY_RUN_TIME:
+      displayRunTime();
+      break;
+    case DISPLAY_NEXT_SETPOINT:
+      displayNextSetpoint();
+      break;
     default:
       lcd.clear();
       lcd.setCursor(0,0);
@@ -591,6 +642,35 @@ void displayCurrentTempSummary() {
   lcd.print("Target:");
   lcd.setCursor(8,1);
   lcd.print(targetTemp);
+}
+
+/**
+ * display run time
+ */ 
+void displayRunTime() {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Total Run Time:");
+  lcd.setCursor(8,1);
+  lcd.print(getPrintableRunTime(runTime));
+}
+
+/**
+ * display next set point
+ * count down to change and new target
+ */ 
+void displayNextSetpoint() {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Next Target Temp");
+  lcd.setCursor(0,1);
+  if (nextSetpoint[0] != -1) {
+    lcd.print(getPrintableRunTime(timeToNextChange[0]));
+    lcd.setCursor(9,1);
+    lcd.print(nextSetpoint[0]);
+  } else {
+    lcd.print("none");
+  }
 }
 
 /**
@@ -764,3 +844,4 @@ void outputStateToSerial() {
   Serial.print(maxTimeCooling);
   Serial.println("' (s)");
 }
+
