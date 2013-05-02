@@ -82,12 +82,16 @@ int maxTimeHeating = 0; // in seconds
 int maxTimeCooling = 0; // in seconds
 
 // Fermentation Tracking and Target Temperature Scheduling
+const int SCHEDULE_ARRAY_SIZE = 10;
 int runTime = 0;                  // seconds
-int timeToNextChange[10] = { 0 }; // init all elements to 0
-int nextSetpoint[10] = { 0 };     // init all elements to 0
+int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
+int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
 // saisson settings
-//int timeToNextChange[10] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
-//int nextSetpoint[10] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
+//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
+//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
+// test variables
+//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 15, 30, 45, 60, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
+//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 
 /**
  * Arduino setup method
@@ -259,7 +263,7 @@ void controlTemperatureState() {
 void checkForScheduledTargetTemperatureChange() {
 
   // no scheduled target temperature changes
-  if (nextSetpoint[0] == 0) {
+  if (nextSetpoint[0] < MINIMUM_TARGET) {
     return;
   }
 
@@ -267,7 +271,7 @@ void checkForScheduledTargetTemperatureChange() {
   timeToNextChange[0]--;
 
   //
-  if (timeToNextChange == 0) {
+  if (timeToNextChange[0] <= 0) {
     performTargetTemperatureChange();
   }
 }
@@ -277,7 +281,14 @@ void checkForScheduledTargetTemperatureChange() {
  * updating the target temperature variable
  */
 void performTargetTemperatureChange() {
-  //TODO
+  
+  targetTemp = nextSetpoint[0];
+  
+  // shift the array elements down (pop queue)
+  for (int i = 0; i < SCHEDULE_ARRAY_SIZE; i++) {
+    nextSetpoint[i] = nextSetpoint[i+1];
+    timeToNextChange[i] = timeToNextChange[i+1];
+  }
 }
 
 /**
@@ -666,7 +677,7 @@ void displayNextSetpoint() {
   if (nextSetpoint[0] != 0) {
     lcd.setCursor(0,1);
     lcd.print(getPrintableRunTime(timeToNextChange[0]));
-    lcd.setCursor(9,1);
+    lcd.setCursor(10,1);
     lcd.print(nextSetpoint[0]);
   } else {
     lcd.setCursor(2,1);
