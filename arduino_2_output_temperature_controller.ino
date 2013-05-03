@@ -83,15 +83,15 @@ int maxTimeCooling = 0; // in seconds
 
 // Fermentation Tracking and Target Temperature Scheduling
 const int SCHEDULE_ARRAY_SIZE = 10;
-int runTime = 0;                  // seconds
-int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
-int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
+unsigned long runTime = 0;                  // seconds
+//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
+//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
 // saisson settings
 //int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
 //int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 // test variables
-//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 15, 30, 45, 60, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
-//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
+unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 691210, 30, 45, 60, 86400, 86400, 86400}; // after 1 hour perform first change, and every day thereafter
+float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 
 /**
  * Arduino setup method
@@ -662,8 +662,8 @@ void displayRunTime() {
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("Total Run Time:");
-  lcd.setCursor(8,1);
-  lcd.print(getPrintableRunTime(runTime));
+  lcd.setCursor(4,1);
+  lcd.print(getPrintableRunTimeInDays(runTime));
 }
 
 /**
@@ -676,8 +676,8 @@ void displayNextSetpoint() {
   lcd.print("Next Target Temp");
   if (nextSetpoint[0] != 0) {
     lcd.setCursor(0,1);
-    lcd.print(getPrintableRunTime(timeToNextChange[0]));
-    lcd.setCursor(10,1);
+    lcd.print(getPrintableRunTimeInDays(timeToNextChange[0]));
+    lcd.setCursor(12,1);
     lcd.print(nextSetpoint[0]);
   } else {
     lcd.setCursor(2,1);
@@ -686,11 +686,25 @@ void displayNextSetpoint() {
 }
 
 /**
+ * return a time in days "dd hh:mm:ss"
+ */
+String getPrintableRunTimeInDays (unsigned long timeInSeconds) {
+
+  String days = "   ";
+  if (timeInSeconds / 86400 > 0) {
+    days = zeroPad(timeInSeconds / 86400);
+    days += "d";
+  }
+  days += getPrintableRunTime(timeInSeconds % 86400);
+  return days;
+}
+
+/**
  * return an int time in seconds as hh:mm:dd
  */
-String getPrintableRunTime(int timeInSeconds) {
+String getPrintableRunTime(unsigned long timeInSeconds) {
   
-  int temp = timeInSeconds / 3600;
+  unsigned int temp = timeInSeconds / 3600;
   if ( temp > 99 ) {
     return "99:99:99";
   }
