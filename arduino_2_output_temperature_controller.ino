@@ -1,14 +1,16 @@
+#include <EEPROM.h>
 #include <LiquidCrystal.h>
 #include <OneWire.h>
+#include <Time.h>
 
 /*--------------------------------------------------------------------------------------
   Constants
 --------------------------------------------------------------------------------------*/
 // internal state constants
-const int DELAY = 100; // 0.1 second
+const int DELAY = 100; // milli-seconds (0.1 second)
 const float TEMP_INCREMENTS = 0.5;
 const float MINIMUM_TARGET = 2.0; // this is enough to get into trouble
-const float MAXIMUM_TARGET = 26.0;
+const float MAXIMUM_TARGET = 29.0;
 const float TEMP_THRESHOLD_INCREMENTS = 0.25;
 const float MINIMUM_THREASHOLD = 0.5;
 const float MAXIMUM_THREASHOLD = 5.0;
@@ -58,11 +60,17 @@ const int DISPLAY_NEXT_SETPOINT  =   8;
 const int DISPLAY_RUN_TIME       =   9;
 const int NO_OF_LCD_STATES       =  10;
 
+// EEPROM Memory Addresses
+const int TARGET_TEMP_ADDRESS       = 0x00;
+const int COOLING_THRESHOLD_ADDRESS   = 0x04; 
+const int HEATING_THRESHOLD_ADDRESS = 0x08;
+
 /**
  * state variables
  */
  // controller state
 int currentControllerState = 1; // 0 = cooling, 1 = inactive, 2 = heating
+boolean controllerSettingsChanged = false;
 int timeInCurrentControllerState = 0; // seconds
 float currentTemp, targetTemp = 19.0, coolingThreshold = 0.5, heatingThreshold = 0.5;
 OneWire ds(TEMP_SENSOR_PIN); // pin 10
@@ -70,7 +78,7 @@ byte addr[8];
 
 // LCD state
 LiquidCrystal lcd( 8, 9, 4, 5, 6, 7 );
-int currentLCDState = 0; // in seconds
+int currentLCDState = 0; // valid state id
 int timeInLCDState = 0; // in seconds
 int backlightTimeout = 0;  // in seconds
 boolean buttonIsPressed = false;
@@ -83,15 +91,15 @@ int maxTimeCooling = 0; // in seconds
 
 // Fermentation Tracking and Target Temperature Scheduling
 const int SCHEDULE_ARRAY_SIZE = 10;
-unsigned long runTime = 0;                  // seconds
-//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
-//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
+//unsigned long runTime = 0;                  // seconds
+unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
+float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
 // saisson settings
-//int timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
-//int nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
+//unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 3600, 86400, 172800, 259200, 345600, 432000, 518400}; // after 1 hour perform first change, and every day thereafter
+//float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 // test variables
-unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 691210, 30, 45, 60, 86400, 86400, 86400}; // after 1 hour perform first change, and every day thereafter
-float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
+//unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 691210, 30, 45, 60, 86400, 86400, 86400}; // after 1 hour perform first change, and every day thereafter
+//float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 22, 23, 24, 25, 26, 27, 28 };     // stabilise at 22 degrees then incrememt by 1 degree per day until 28 degrees
 
 /**
  * Arduino setup method
@@ -124,6 +132,14 @@ void setup(void) {
   pinMode( 13, OUTPUT );
   digitalWrite( 13, LOW );      // ensure initial state is inactive
 
+  
+  // initialise the time to 01-Jan-2013 07:00:000
+  setTime(0,0,0,1,1,2013); // hour, min, sec, day month, year
+
+  // read variables from flash memory
+  EEPROMReadFloat(TARGET_TEMP_ADDRESS, targetTemp);
+  EEPROMReadFloat(COOLING_THRESHOLD_ADDRESS, coolingThreshold);
+  EEPROMReadFloat(HEATING_THRESHOLD_ADDRESS, heatingThreshold);
 }
 
 /**
@@ -146,7 +162,7 @@ void loop(void) {
   // update the display
   displayState(); 
 
-  runTime++;
+//  runTime++;
 
   // check to see if a target temperature change has been scheduled
   checkForScheduledTargetTemperatureChange();
@@ -308,6 +324,10 @@ void controlDisplayState() {
     
     // return to summary screen after timeout
     if ( timeInLCDState >= REDIRECT_TIMEOUT ) {
+      if (controllerSettingsChanged) {
+        controllerSettingsChanged = false;
+        flashUpdatedControllerState();
+      }
       timeInLCDState = 0;
       currentLCDState = DISPLAY_SUMMARY;
       displaySummary();
@@ -352,6 +372,12 @@ void handleLeftRight( int whichButtonPressed ) {
     // reset state timeout
     timeInLCDState = 0;
 
+    // flash changed variables
+    if (controllerSettingsChanged) {
+      flashUpdatedControllerState();
+      controllerSettingsChanged = false;
+    }
+    
     if ( whichButtonPressed == BUTTON_RIGHT ) {
       currentLCDState++;
     } else {
@@ -385,6 +411,7 @@ void handleUpDown( int whichButtonPressed ) {
         timeInLCDState = 0;
         if ( coolingThreshold < MAXIMUM_THREASHOLD ) {
           coolingThreshold += TEMP_THRESHOLD_INCREMENTS;
+          controllerSettingsChanged = true;
         } 
       }
       else if ( whichButtonPressed == BUTTON_DOWN ) {
@@ -393,6 +420,7 @@ void handleUpDown( int whichButtonPressed ) {
         
         if ( coolingThreshold > MINIMUM_THREASHOLD ) {
           coolingThreshold -= TEMP_THRESHOLD_INCREMENTS; 
+          controllerSettingsChanged = true;
         }
       }
       break;
@@ -405,6 +433,7 @@ void handleUpDown( int whichButtonPressed ) {
 
         if ( heatingThreshold < MAXIMUM_THREASHOLD ) {
           heatingThreshold += TEMP_THRESHOLD_INCREMENTS; 
+          controllerSettingsChanged = true;
         }
       }
       else if ( whichButtonPressed == BUTTON_DOWN ) {
@@ -412,6 +441,7 @@ void handleUpDown( int whichButtonPressed ) {
         timeInLCDState = 0;
         if ( heatingThreshold > MINIMUM_THREASHOLD ) {
           heatingThreshold -= TEMP_THRESHOLD_INCREMENTS; 
+          controllerSettingsChanged = true;
         }
       }
       break;
@@ -423,13 +453,15 @@ void handleUpDown( int whichButtonPressed ) {
 
         if ( targetTemp < MAXIMUM_TARGET ) {
           targetTemp += TEMP_INCREMENTS; 
+          controllerSettingsChanged = true;
         }
       }
       else if ( whichButtonPressed == BUTTON_DOWN ) {
         // reset state timeout
         timeInLCDState = 0;
         if ( targetTemp > MINIMUM_TARGET ) {
-        targetTemp -= TEMP_INCREMENTS; 
+          targetTemp -= TEMP_INCREMENTS; 
+          controllerSettinsChanged = true;
         }
       }
       break;
@@ -465,6 +497,26 @@ void enableBacklight() {
   backlightTimeout = 0;
   isBacklightActive = true;
 }
+
+/**
+ * write updated controller state variables to flash memory
+ */
+void flashUpdatedControllerState() {
+
+  switch (currentLCDState) {
+    case DISPLAY_SET_TARGET:
+      EEPROMWriteFloat(TARGET_TEMP_ADDRESS, targetTemp);
+      break;
+    case DISPLAY_SET_MAX_TEMP:
+      EEPROMWriteFloat(COOLING_THRESHOLD_ADDRESS, coolingThreshold);
+      break;  
+    case DISPLAY_SET_MIN_TEMP:
+      EEPROMWriteFloat(HEATING_THRESHOLD_ADDRESS, heatingThreshold);
+      break;
+  } 
+}
+
+
 /**
  * output the data for the current display state to the LCD screen
  */
@@ -663,7 +715,7 @@ void displayRunTime() {
   lcd.setCursor(0,0);
   lcd.print("Total Run Time:");
   lcd.setCursor(4,1);
-  lcd.print(getPrintableRunTimeInDays(runTime));
+  lcd.print(getPrintableRunTimeInDays(millis()/1000));
 }
 
 /**
@@ -820,6 +872,49 @@ byte ReadButtons()
    return( button );
 }
 
+/** 
+ * read and write float values to/from EEPROM
+ based on http://forum.arduino.cc/index.php/topic,41497.0.html
+ */
+int EEPROMReadFloat(int ee, float& value)
+{
+    byte* p = (byte*)(void*)&value;
+    int i;
+    for (i = 0; i < sizeof(value); i++)
+        *p++ = EEPROM.read(ee++);
+    return i;
+}
+
+int EEPROMWriteFloat(int ee, float& value)
+{
+    const byte* p = (const byte*)(const void*)&value;
+    int i;
+    for (i = 0; i < sizeof(value); i++)
+        EEPROM.write(ee++, *p++);
+    return i;
+}
+
+int EEPROMReadLong(int ee, long& value)
+{
+    byte* p = (byte*)(void*)&value;
+    int i;
+    for (i = 0; i < sizeof(value); i++)
+        *p++ = EEPROM.read(ee++);
+    return i;
+}
+
+int EEPROMWriteLong(int ee, long& value)
+{
+    const byte* p = (const byte*)(const void*)&value;
+    int i;
+    for (i = 0; i < sizeof(value); i++)
+        EEPROM.write(ee++, *p++);
+    return i;
+}
+
+/**
+ * debug function to serial port
+ */
 void outputStateToSerial() {
   Serial.print("controller state: ");
   switch (currentControllerState ) {
