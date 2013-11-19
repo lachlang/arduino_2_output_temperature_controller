@@ -461,7 +461,7 @@ void handleUpDown( int whichButtonPressed ) {
         timeInLCDState = 0;
         if ( targetTemp > MINIMUM_TARGET ) {
           targetTemp -= TEMP_INCREMENTS; 
-          controllerSettinsChanged = true;
+          controllerSettingsChanged = true;
         }
       }
       break;
