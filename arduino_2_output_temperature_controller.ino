@@ -62,7 +62,7 @@ const int NO_OF_LCD_STATES       =  10;
 
 // EEPROM Memory Addresses
 const int TARGET_TEMP_ADDRESS       = 0x00;
-const int COOLING_THRESHOLD_ADDRESS   = 0x04; 
+const int COOLING_THRESHOLD_ADDRESS = 0x04; 
 const int HEATING_THRESHOLD_ADDRESS = 0x08;
 
 /**
@@ -71,7 +71,6 @@ const int HEATING_THRESHOLD_ADDRESS = 0x08;
  // controller state
 int currentControllerState = 1; // 0 = cooling, 1 = inactive, 2 = heating
 boolean controllerSettingsChanged = false;
-int timeInCurrentControllerState = 0; // seconds
 float currentTemp, targetTemp = 19.0, coolingThreshold = 0.5, heatingThreshold = 0.5;
 OneWire ds(TEMP_SENSOR_PIN); // pin 10
 byte addr[8];
@@ -86,12 +85,14 @@ boolean isBacklightActive = true;
 
 // history stuff
 float maxTemp = -100.0, minTemp = 200.0;
-int maxTimeHeating = 0; // in seconds
-int maxTimeCooling = 0; // in seconds
+unsigned long timeInCurrentControllerState_ms = 0; // milli-seconds
+unsigned long timeEnteredCurrentControllerState_ms = 0; // milli-seconds
+unsigned long maxTimeHeating_ms = 0; // in milli-seconds
+unsigned long maxTimeCooling_ms = 0; // in milli-seconds
 
 // Fermentation Tracking and Target Temperature Scheduling
 const int SCHEDULE_ARRAY_SIZE = 10;
-//unsigned long runTime = 0;                  // seconds
+
 unsigned long timeToNextChange[SCHEDULE_ARRAY_SIZE] = { 0 }; // init all elements to 0
 float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
 // saisson settings
@@ -162,8 +163,6 @@ void loop(void) {
   // update the display
   displayState(); 
 
-//  runTime++;
-
   // check to see if a target temperature change has been scheduled
   checkForScheduledTargetTemperatureChange();
 
@@ -224,17 +223,17 @@ float getCurrentTemperature() {
  */
 void controlTemperatureState() {
 
-  timeInCurrentControllerState++;
+  timeInCurrentControllerState_ms = millis() - timeEnteredCurrentControllerState_ms;
   
   switch ( currentControllerState ) {
     case STATE_COOLING:
       if (currentTemp < targetTemp + coolingThreshold) {
         //stop cooling
         currentControllerState = STATE_INACTIVE;
-        if (timeInCurrentControllerState > maxTimeCooling) {
-          maxTimeCooling = timeInCurrentControllerState;
+        if (timeInCurrentControllerState_ms > maxTimeCooling_ms) {
+          maxTimeCooling_ms = timeInCurrentControllerState_ms;
         }
-        timeInCurrentControllerState = 0;
+        timeEnteredCurrentControllerState_ms = millis();
         digitalWrite(COOLING_PIN, LOW);
         digitalWrite( 13, LOW );
 
@@ -244,27 +243,26 @@ void controlTemperatureState() {
       if (currentTemp < targetTemp - heatingThreshold) {
         //start heating
         currentControllerState = STATE_HEATING;
-        timeInCurrentControllerState = 0;
+        timeEnteredCurrentControllerState_ms = millis();
         digitalWrite(HEATING_PIN, HIGH);
         digitalWrite( 13, HIGH );
       }
       else if (currentTemp > targetTemp + coolingThreshold) {
         //start cooling
         currentControllerState = STATE_COOLING;
-        timeInCurrentControllerState = 0;
+        timeEnteredCurrentControllerState_ms = millis();
         digitalWrite(COOLING_PIN, HIGH);
         digitalWrite( 13, HIGH );
       }
       break;
     case STATE_HEATING:
-      maxTimeHeating++;
       if (currentTemp > targetTemp - heatingThreshold) {
         //stop heating
         currentControllerState = STATE_INACTIVE;
-        if (timeInCurrentControllerState > maxTimeHeating) {
-          maxTimeHeating = timeInCurrentControllerState;
+        if (timeInCurrentControllerState_ms > maxTimeHeating_ms) {
+          maxTimeHeating_ms = timeInCurrentControllerState_ms;
         }
-        timeInCurrentControllerState = 0;
+        timeInCurrentControllerState_ms = millis();
         digitalWrite(HEATING_PIN, LOW);
         digitalWrite( 13, LOW );
       } // if
@@ -644,14 +642,14 @@ void displayCoolerStatus() {
     lcd.setCursor(0,1);
     lcd.print("Running:");
     lcd.setCursor(8,1);
-    lcd.print(getPrintableRunTime(timeInCurrentControllerState));
+    lcd.print(getPrintableRunTime(timeInCurrentControllerState_ms / 1000));
   }
   else {
     lcd.print("off");
     lcd.setCursor(0,1);
     lcd.print("Max Run:");
     lcd.setCursor(8,1);
-    lcd.print(getPrintableRunTime(maxTimeCooling));
+    lcd.print(getPrintableRunTime(maxTimeCooling_ms / 1000));
   }
 }
 
@@ -668,14 +666,14 @@ void displayHeaterStatus() {
     lcd.setCursor(0,1);
     lcd.print("Running:");
     lcd.setCursor(8,1);
-    lcd.print(getPrintableRunTime(timeInCurrentControllerState));
+    lcd.print(getPrintableRunTime(timeInCurrentControllerState_ms / 1000));
   }
   else {
     lcd.print("off");
     lcd.setCursor(0,1);
     lcd.print("Max Run:");
     lcd.setCursor(8,1);
-    lcd.print(getPrintableRunTime(maxTimeHeating));
+    lcd.print(getPrintableRunTime(maxTimeHeating_ms / 1000));
   }
 }
 
@@ -929,7 +927,7 @@ void outputStateToSerial() {
       break;
   }
   Serial.print("time in controller state: '");
-  Serial.print(timeInCurrentControllerState);
+  Serial.print(timeInCurrentControllerState_ms);
   Serial.println("' (s)");
 
   Serial.print("current temp: '");
@@ -959,10 +957,10 @@ void outputStateToSerial() {
   Serial.print(minTemp);
   Serial.println("'");
   Serial.print("time heating: '");
-  Serial.print(maxTimeHeating);
+  Serial.print(maxTimeHeating_ms);
   Serial.println("' (s)");
   Serial.print("time cooling: '");
-  Serial.print(maxTimeCooling);
+  Serial.print(maxTimeCooling_ms);
   Serial.println("' (s)");
 }
 
