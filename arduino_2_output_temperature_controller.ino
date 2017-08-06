@@ -18,8 +18,9 @@ const int DISPLAY_TIMER_INCREMENT = 1000 / DELAY; // make sure our display timer
 const int REDIRECT_TIMEOUT = 1000; // redirect after 10 seconds
 
 // Pins in use
-# define BUTTON_ADC_PIN            A0  // A0 is the button ADC input
-//const int BUTTON_ADC_PIN           = 0;  // A0 is the button ADC input
+# define BUTTON_ADC_PIN_DEFAULT    A0  // A0 is the button ADC input
+# define BUTTON_ADC_PIN_EXTENDED   A2  // A0 is also the button ADC input
+//const int BUTTON_ADC_PIN         = 0;  // A0 is the button ADC input
 const int COOLING_PIN              = 12; // can't seem to get pin 1 to work
 const int HEATING_PIN              = 2;
 const int LCD_BACKLIGHT_PIN        = 3;  // D3 controls LCD backlight
@@ -71,7 +72,7 @@ const int HEATING_THRESHOLD_ADDRESS = 0x08;
  // controller state
 int currentControllerState = 1; // 0 = cooling, 1 = inactive, 2 = heating
 boolean controllerSettingsChanged = false;
-float currentTemp, targetTemp = 19.0, coolingThreshold = 0.5, heatingThreshold = 0.5;
+float currentTemp, targetTemp = 18.5, coolingThreshold = 0.5, heatingThreshold = 0.5;
 OneWire ds(TEMP_SENSOR_PIN); // pin 10
 byte addr[8];
 
@@ -120,8 +121,10 @@ void setup(void) {
   minTemp = maxTemp;
   
   // initialise the pins
-  pinMode( BUTTON_ADC_PIN, INPUT );         //ensure A0 is an input
-  digitalWrite( BUTTON_ADC_PIN, LOW );      //ensure pullup is off on A0
+  pinMode( BUTTON_ADC_PIN_DEFAULT, INPUT );         //ensure A0 is an input
+  digitalWrite( BUTTON_ADC_PIN_DEFAULT, LOW );      //ensure pullup is off on A0
+  pinMode( BUTTON_ADC_PIN_EXTENDED, INPUT );        //ensure A2 is an input
+  digitalWrite( BUTTON_ADC_PIN_EXTENDED, LOW );     //ensure pullup is off on A2
   pinMode( TEMP_SENSOR_PIN, INPUT );
   pinMode( LCD_BACKLIGHT_PIN, OUTPUT );
   digitalWrite( LCD_BACKLIGHT_PIN, HIGH );
@@ -819,12 +822,9 @@ boolean initialiseTemperatureSensor() {
 --------------------------------------------------------------------------------------*/
 byte ReadButtons()
 {
-   unsigned int buttonVoltage;
+   unsigned int buttonVoltage = ReadButtonVoltage();
    byte button = BUTTON_NONE;   // return no button pressed if the below checks don't write to btn
    
-   //read the button ADC pin voltage
-   buttonVoltage = analogRead( BUTTON_ADC_PIN );
-
    // check if this is a new button press
    if (buttonIsPressed && buttonVoltage > ( NO_BUTTON_ADC - BUTTONHYSTERESIS )) {
      // button has been released
@@ -866,10 +866,24 @@ byte ReadButtons()
       buttonIsPressed = true;
    }
    
-   
    return( button );
 }
 
+/**
+ * Read from the analogue input pins and select the default pin if both have pressed values
+ */
+unsigned int ReadButtonVoltage()
+{
+   //read the button ADC pin voltage
+  unsigned int defaultButtonVoltage = analogRead( BUTTON_ADC_PIN_DEFAULT );
+  unsigned int extendedButtonVoltage = analogRead( BUTTON_ADC_PIN_EXTENDED );
+
+  if (defaultButtonVoltage > ( NO_BUTTON_ADC - BUTTONHYSTERESIS )) {
+    return (defaultButtonVoltage);
+  }
+  return (extendedButtonVoltage);
+}
+ 
 /** 
  * read and write float values to/from EEPROM
  based on http://forum.arduino.cc/index.php/topic,41497.0.html
