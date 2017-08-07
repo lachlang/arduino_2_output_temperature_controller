@@ -106,9 +106,12 @@ float nextSetpoint[SCHEDULE_ARRAY_SIZE] = { 0 };     // init all elements to 0
  */
 void setup(void) {
   lcd.begin(16, 2);  
-  lcd.print("Initialising...");
+  lcd.print("Hi Lachlan...");
+  lcd.setCursor(0,1);
+  lcd.print("Let's make beer!");
   Serial.begin(9800);
-  Serial.println("Initialising...");
+  Serial.println("Hi Lachlan...");
+  Serial.println("Let's make beer!");
   
   if ( !initialiseTemperatureSensor() ) {
     lcd.print("Sensor init failed!");
