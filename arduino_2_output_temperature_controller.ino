@@ -10,7 +10,7 @@
 const int DELAY = 100; // milli-seconds (0.1 second)
 const float TEMP_INCREMENTS = 0.5;
 const float MINIMUM_TARGET = 2.0; // this is enough to get into trouble
-const float MAXIMUM_TARGET = 29.0;
+const float MAXIMUM_TARGET = 40.0; // increased to allow for a VOSS IPA :D
 const float TEMP_THRESHOLD_INCREMENTS = 0.25;
 const float MINIMUM_THREASHOLD = 0.5;
 const float MAXIMUM_THREASHOLD = 5.0;
@@ -48,15 +48,15 @@ const int STATE_HEATING          =   2;
 
 // LCD States
 const int DISPLAY_SUMMARY        =   0;
-const int DISPLAY_TEMP_HISTORY   =   1;
+const int DISPLAY_SET_TARGET     =   1;
 const int DISPLAY_SET_MAX_TEMP   =   2;
 const int DISPLAY_SET_MIN_TEMP   =   3;
 const int DISPLAY_COOLER_STATUS  =   4;
 const int DISPLAY_WARMER_STATUS  =   5;
-const int DISPLAY_SET_TARGET     =   6;
-const int DISPLAY_TEMP_SUMMARY   =   7;
-const int DISPLAY_NEXT_SETPOINT  =   8;
-const int DISPLAY_RUN_TIME       =   9;
+const int DISPLAY_TEMP_SUMMARY   =   6;
+const int DISPLAY_NEXT_SETPOINT  =   7;
+const int DISPLAY_RUN_TIME       =   8;
+const int DISPLAY_TEMP_HISTORY   =   9;
 const int NO_OF_LCD_STATES       =  10;
 
 // EEPROM Memory Addresses
@@ -136,8 +136,8 @@ void setup(void) {
   digitalWrite( 13, LOW );      // ensure initial state is inactive
 
   
-  // initialise the time to 01-Jan-2013 07:00:000
-  setTime(0,0,0,1,1,2013); // hour, min, sec, day month, year
+//  // initialise the time to 01-Jan-2013 07:00:000
+//  setTime(0,0,0,1,1,2013); // hour, min, sec, day month, year
 
   // read variables from flash memory
   EEPROMReadFloat(TARGET_TEMP_ADDRESS, targetTemp);
@@ -301,7 +301,7 @@ void performTargetTemperatureChange() {
   targetTemp = nextSetpoint[0];
   
   // shift the array elements down (pop queue)
-  for (int i = 0; i < SCHEDULE_ARRAY_SIZE; i++) {
+  for (int i = 0; i < SCHEDULE_ARRAY_SIZE -1; i++) {
     nextSetpoint[i] = nextSetpoint[i+1];
     timeToNextChange[i] = timeToNextChange[i+1];
   }
@@ -963,4 +963,3 @@ void outputStateToSerial() {
   Serial.print(maxTimeCooling_ms);
   Serial.println("' (s)");
 }
-
